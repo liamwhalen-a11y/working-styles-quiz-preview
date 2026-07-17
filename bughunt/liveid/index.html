@@ -1,0 +1,1505 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>How Do You Lead?</title>
+
+<!--
+  Working Styles Quiz — single-file app.
+  Quiz copy lives in content.js; deployment/collection settings live in config.js.
+  Pure HTML/CSS/vanilla JS. No frameworks, no build step.
+  With CONFIG.ENDPOINT empty it runs fully offline (individual quiz, no data collected).
+  With an endpoint set it also captures identity + shows live team dashboards (see DEPLOY.md).
+-->
+<script src="config.js"></script>
+<script src="content.js"></script>
+
+<style>
+  /* ---------- Theme tokens ---------- */
+  :root {
+    --bg: #0a0a0b;
+    --surface: #1c1c1e;         /* aligned to Grindr Pre Fab dark surface (~#1F1F20) */
+    --surface-2: #26262b;
+    --line: #2f2f35;
+    --text: #f5f4ef;
+    --muted: #9b9ba2;
+    --muted-2: #8c8c93;  /* >=4.5:1 on --bg for WCAG AA on small text */
+    --accent: #ffcc00;          /* Grindr brand yellow (from Grindr Pre Fab); result screen re-themes this */
+    --accent-ink: #0a0a0b;      /* black-on-yellow, per Grindr button treatment */
+    --radius: 18px;
+    --maxw: 760px;
+    --font-display: "Futura", "Avenir Next", ui-sans-serif, -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+    --font-body: "Avenir Next", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    min-height: 100dvh;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* Atmospheric accent glow + subtle grain, transitions with the accent color */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(60% 55% at 50% -8%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
+      radial-gradient(50% 40% at 100% 100%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 70%);
+    transition: background 600ms var(--ease);
+    pointer-events: none;
+  }
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.035;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: clamp(20px, 5vw, 44px);
+    padding-bottom: calc(clamp(20px, 5vw, 44px) + env(safe-area-inset-bottom));  /* clear the iPhone home indicator */
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- Screen transitions ---------- */
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.is-active { display: flex; animation: screenIn 340ms var(--ease) both; }
+  @keyframes screenIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  /* ---------- Shared type ---------- */
+  .eyebrow {
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1, h2, .display {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.02;
+  }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.02rem;
+    letter-spacing: 0.01em;
+    border: none;
+    border-radius: 999px;
+    padding: 15px 30px;
+    cursor: pointer;
+    background: var(--accent);
+    color: var(--accent-ink);
+    transition: transform 140ms var(--ease), box-shadow 200ms var(--ease), background 400ms var(--ease), opacity 140ms;
+    box-shadow: 0 10px 30px -10px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 16px 40px -12px color-mix(in srgb, var(--accent) 70%, transparent); }
+  .btn:active { transform: translateY(0); }
+  .btn.ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--line);
+    box-shadow: none;
+    font-weight: 500;
+  }
+  .btn.ghost:hover { border-color: var(--accent); color: var(--accent); transform: none; }
+
+  :focus-visible {
+    /* no border-radius here — the outline follows each element's own radius,
+       so pill buttons keep their pill-shaped focus ring */
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  /* ---------- Start screen ---------- */
+  #screen-start { justify-content: center; }
+  .start-inner { max-width: 620px; }
+  .start-title {
+    font-size: clamp(3rem, 11vw, 5.6rem);
+    margin: 18px 0 22px;
+  }
+  .start-title .q { color: var(--accent); }
+  .start-intro {
+    font-size: clamp(1.05rem, 2.4vw, 1.28rem);
+    color: var(--muted);
+    max-width: 30em;
+    margin-bottom: 40px;
+  }
+  .start-meta {
+    margin-top: 26px;
+    font-size: 0.85rem;
+    color: var(--muted-2);
+    display: flex;
+    gap: 22px;
+    flex-wrap: wrap;
+  }
+  .start-meta span { display: inline-flex; align-items: center; gap: 7px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: inline-block; }
+
+  /* ---------- Quiz header / progress ---------- */
+  .quiz-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 26px;
+  }
+  .qcount {
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .qcount b { color: var(--text); }
+  .progress {
+    height: 5px;
+    background: var(--surface-2);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 34px;
+  }
+  .progress > i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--accent);
+    border-radius: 999px;
+    transition: width 420ms var(--ease);
+  }
+
+  /* ---------- Question ---------- */
+  .q-stage { flex: 1; }
+  .qtext {
+    font-size: clamp(1.5rem, 4.4vw, 2.15rem);
+    margin-bottom: 28px;
+    max-width: 20em;
+  }
+  .q-anim { animation: qIn 240ms var(--ease) both; }
+  .q-anim[data-dir="back"] { animation-name: qInBack; }
+  @keyframes qIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+  @keyframes qInBack { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+
+  .options { display: flex; flex-direction: column; gap: 12px; }
+  .option {
+    text-align: left;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 1.05rem;
+    line-height: 1.4;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: border-color 160ms var(--ease), background 160ms var(--ease), transform 120ms var(--ease);
+  }
+  .option:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: var(--surface-2); transform: translateX(3px); }
+  .option .key {
+    flex: 0 0 auto;
+    width: 30px; height: 30px;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+    display: grid; place-items: center;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    color: var(--muted);
+    transition: all 160ms var(--ease);
+  }
+  .option:hover .key { border-color: var(--accent); color: var(--accent); }
+  .option.selected {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  }
+  .option.selected .key { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  .quiz-nav { margin-top: 30px; display: flex; align-items: center; gap: 14px; }
+  .hint { color: var(--muted-2); font-size: 0.82rem; margin-left: auto; }
+  @media (max-width: 560px) { .hint { display: none; } }
+
+  /* ---------- Tie screen ---------- */
+  .tie-head { margin-bottom: 8px; }
+  .tie-title { font-size: clamp(1.9rem, 6vw, 2.8rem); margin: 10px 0 10px; }
+  .tie-sub { color: var(--muted); margin-bottom: 30px; max-width: 34em; }
+  .tie-grid { display: grid; gap: 14px; }
+  .tie-card {
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--tc, var(--accent));
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    cursor: pointer;
+    color: var(--text);
+    transition: transform 140ms var(--ease), border-color 160ms var(--ease), background 160ms;
+  }
+  .tie-card:hover { transform: translateY(-3px); background: var(--surface-2); }
+  .tie-card .tc-name { font-family: var(--font-display); font-weight: 700; font-size: 1.4rem; color: var(--tc, var(--accent)); }
+  .tie-card .tc-tag { color: var(--muted); margin-top: 4px; }
+
+  /* ---------- Result screen ---------- */
+  .result-hero { margin-bottom: 8px; }
+  .result-eyebrow { color: var(--muted); letter-spacing: 0.22em; }
+  .result-name {
+    font-size: clamp(2.6rem, 9vw, 4.6rem);
+    color: var(--accent);
+    margin: 6px 0 10px;
+    line-height: 0.98;
+  }
+  .result-tagline { font-size: clamp(1.1rem, 3vw, 1.4rem); color: var(--text); max-width: 24em; }
+  .result-desc { color: var(--muted); font-size: 1.08rem; margin-top: 16px; max-width: 40em; }
+  .secondary-note {
+    margin-top: 20px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+  .secondary-note b { color: var(--text); }
+
+  .cols {
+    margin-top: 36px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 680px) { .cols { grid-template-columns: 1fr; } }
+  .col {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .col h3 {
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .col ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .col li { font-size: 0.96rem; color: var(--text); padding-left: 18px; position: relative; line-height: 1.4; }
+  .col li::before { content: ""; position: absolute; left: 0; top: 0.6em; width: 7px; height: 7px; border-radius: 2px; background: var(--accent); }
+
+  /* Ranked bars */
+  .ranking { margin-top: 36px; }
+  .ranking h3 {
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+  .bar-row { display: grid; grid-template-columns: 130px 1fr 34px; align-items: center; gap: 14px; margin-bottom: 12px; }
+  @media (max-width: 480px) { .bar-row { grid-template-columns: 96px 1fr 28px; gap: 10px; } }
+  .bar-label { font-size: 0.92rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { height: 12px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; width: 0; border-radius: 999px; transition: width 700ms var(--ease); }
+  .bar-val { font-family: var(--font-display); font-size: 0.9rem; color: var(--muted); text-align: right; }
+
+  .result-actions { margin-top: 40px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  @media (max-width: 420px) { .result-actions .btn { flex: 1 1 100%; } .result-actions .copied { flex: 1 1 100%; } }
+  .copied { color: var(--accent); font-size: 0.9rem; opacity: 0; transition: opacity 200ms; }
+  .copied.show { opacity: 1; }
+
+  /* ---------- Facilitator view ---------- */
+  .fac-head { margin-bottom: 30px; }
+  .fac-title { font-size: clamp(2rem, 6vw, 3rem); margin: 8px 0; }
+  .fac-grid { display: grid; gap: 16px; }
+  .fac-card { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--fc); border-radius: var(--radius); padding: 20px 22px; }
+  .fac-card h2 { font-size: 1.5rem; color: var(--fc); }
+  .fac-card .fc-tag { color: var(--muted); margin: 3px 0 10px; }
+  .fac-card p { color: var(--muted); }
+
+  .footer-link { margin-top: 24px; }
+  .footer-link a {
+    display: inline-block;
+    padding: 12px 4px;            /* ~44px tap target on touch devices */
+    color: var(--muted-2);
+    font-size: 0.85rem;
+    text-decoration: none;
+    letter-spacing: 0.04em;
+  }
+  .footer-link a:hover { color: var(--accent); }
+
+  /* ---------- Intake form (data-collection mode) ---------- */
+  .intake { display: flex; flex-direction: column; gap: 14px; margin: 4px 0 30px; max-width: 460px; }
+  .intake .field { display: flex; flex-direction: column; gap: 6px; }
+  .intake label { font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-family: var(--font-display); }
+  .intake input, .intake select {
+    font-family: var(--font-body);
+    font-size: 1.02rem;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 13px 14px;
+    width: 100%;
+    -webkit-appearance: none; appearance: none;
+  }
+  .intake select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239b9ba2' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center; padding-right: 34px;
+  }
+  .intake input:focus, .intake select:focus { border-color: var(--accent); outline: none; }
+  .intake input::placeholder { color: var(--muted-2); }
+  .intake-error {
+    color: #ff8a8a; font-size: 0.9rem; margin: 0 0 14px; max-width: 460px;
+  }
+  .intake-note { color: var(--muted); font-size: 0.85rem; line-height: 1.45; max-width: 460px; margin: -16px 0 26px; }
+  .dash-note { color: var(--muted-2); font-size: 0.82rem; margin-top: 14px; }
+
+  /* ---------- Dashboard ---------- */
+  .dash-head { margin-bottom: 20px; }
+  .dash-title { font-size: clamp(2rem, 6vw, 3.2rem); margin: 8px 0 8px; }
+  .dash-sub { color: var(--muted); }
+  .dash-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 26px; }
+  .btn.ghost.danger { border-color: #5a3535; color: #ff8a8a; }
+  .btn.ghost.danger:hover { border-color: #ff8a8a; color: #ff8a8a; }
+  .btn.danger-solid { background: #c8402f; color: #fff; box-shadow: none; }
+  .btn.danger-solid:hover { background: #d64a38; box-shadow: none; }
+  .dash-confirm {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin: -8px 0 26px; padding: 14px 16px;
+    background: var(--surface); border: 1px solid #5a3535; border-radius: 12px;
+    color: var(--text); font-size: 0.95rem;
+  }
+  .dash-confirm[hidden] { display: none; }   /* author display:flex would otherwise override the hidden attribute */
+  .dash-confirm span { flex: 1 1 auto; min-width: 200px; }
+  .dash-pin {
+    font: inherit; font-size: 0.95rem; color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; width: 160px; -webkit-appearance: none; appearance: none;
+  }
+  .dash-pin:focus { outline: none; border-color: var(--accent); }
+  .dash-reset-err { flex: 1 1 100%; color: #ff8a8a; font-size: 0.85rem; min-height: 0; }
+  .dash-reset-err:empty { display: none; }
+  .dash-cut { font-family: var(--font-display); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); display: inline-flex; align-items: center; }
+  .dash-cut select {
+    font-family: var(--font-body); font-size: 0.98rem; text-transform: none; letter-spacing: normal;
+    color: var(--text); background: var(--surface); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 12px; margin-left: 4px;
+  }
+  .dash-section { margin-bottom: 34px; }
+  .dash-section h3 {
+    font-family: var(--font-display); font-size: 0.78rem; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 16px;
+  }
+  /* overall distribution bars */
+  .dbar-row { display: grid; grid-template-columns: 130px 1fr minmax(66px, max-content); align-items: center; gap: 14px; margin-bottom: 11px; }
+  @media (max-width: 480px) { .dbar-row { grid-template-columns: 84px 1fr minmax(60px, max-content); gap: 10px; } }
+  .dbar-label { font-size: 0.94rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dbar-track { height: 14px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .dbar-fill { height: 100%; width: 0; border-radius: 999px; transition: width 600ms var(--ease); }
+  .dbar-val { font-family: var(--font-display); font-size: 0.88rem; color: var(--muted); text-align: right; white-space: nowrap; }
+  /* grouped stacked bars (by team etc.) */
+  .grp-row { display: grid; grid-template-columns: 150px 1fr 44px; align-items: center; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 560px) { .grp-row { grid-template-columns: 1fr; gap: 6px; } }
+  .grp-label { font-size: 0.95rem; color: var(--text); }
+  .grp-count { font-family: var(--font-display); font-size: 0.85rem; color: var(--muted); text-align: right; }
+  @media (max-width: 560px) { .grp-count { text-align: left; } }
+  .stack { display: flex; height: 26px; border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+  .stack > span { display: block; height: 100%; min-width: 4px; }   /* floor slivers so every nonzero type shows */
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px; }
+  .legend-item { display: inline-flex; align-items: center; gap: 7px; font-size: 0.85rem; color: var(--muted); }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .dash-empty { color: var(--muted); font-size: 1.05rem; padding: 20px 0; }
+  .dash-empty.err { color: #ff8a8a; }
+  .submit-status { color: var(--muted); font-size: 0.9rem; margin-top: 14px; }
+  .submit-status.err { color: #ff8a8a; }
+
+  /* ---------- Print: just the archetype card ---------- */
+  @media print {
+    html, body { background: #fff !important; color: #111 !important; }
+    body::before, body::after { display: none !important; }
+    .wrap { max-width: 100%; padding: 0; }
+    .screen { display: none !important; }
+    #screen-result.is-active { display: block !important; animation: none; }
+    .result-name { color: #111 !important; }
+    .result-eyebrow, .col h3 { color: #333 !important; }
+    .result-desc, .result-tagline, .col li, .secondary-note { color: #111 !important; }
+    /* force the list-marker background to actually print */
+    .col li::before {
+      background: #111 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .col, .secondary-note { border-color: #ccc; background: #fff; }
+    .result-actions, .ranking, .footer-link, .quiz-nav { display: none !important; }
+    /* if printed before a result exists, show a note instead of a blank page */
+    #print-note { display: none; }
+    body:not(:has(#screen-result.is-active)) #print-note {
+      display: block; padding: 24px 0; color: #111; font-family: var(--font-body); font-size: 1rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+</style>
+
+<main class="wrap">
+  <!-- START -->
+  <section id="screen-start" class="screen" aria-labelledby="start-title">
+    <div class="start-inner">
+      <div class="eyebrow" id="start-eyebrow">Working Styles</div>
+      <h1 class="start-title" id="start-title"></h1>
+      <p class="start-intro" id="start-intro"></p>
+      <form class="intake" id="intake" hidden novalidate></form>
+      <p class="intake-note" id="intake-note" hidden>Your name, team, and email are saved with your result in a private sheet for the session organizer. The live dashboard shows team totals only — never individual names.</p>
+      <div class="intake-error" id="intake-error" role="alert" hidden></div>
+      <button class="btn" id="begin-btn" type="button">Begin&nbsp;→</button>
+      <div class="start-meta">
+        <span><i class="dot"></i> <span id="meta-count"></span> questions</span>
+        <span><i class="dot"></i> ~5 minutes</span>
+      </div>
+      <div class="footer-link" id="start-dash-link" hidden><a href="#dashboard">See the room's results →</a></div>
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="screen-quiz" class="screen" aria-labelledby="qtext">
+    <div class="quiz-top">
+      <div class="qcount">Question <b id="q-now">1</b> <span id="q-total"></span></div>
+      <button class="btn ghost" id="back-btn" type="button">← Back</button>
+    </div>
+    <div class="progress"><i id="progress-fill"></i></div>
+    <div class="q-stage">
+      <div id="q-anim">
+        <h2 class="qtext" id="qtext"></h2>
+        <div class="options" id="options" role="group" aria-labelledby="qtext"></div>
+      </div>
+    </div>
+    <div class="quiz-nav">
+      <span class="hint">Use ↑ ↓ to move, Enter to choose</span>
+    </div>
+  </section>
+
+  <!-- TIE -->
+  <section id="screen-tie" class="screen" aria-labelledby="tie-title">
+    <div class="tie-head">
+      <div class="eyebrow">Photo finish</div>
+      <h2 class="tie-title" id="tie-title" tabindex="-1">It was close.</h2>
+      <p class="tie-sub" id="tie-sub"></p>
+    </div>
+    <div class="tie-grid" id="tie-grid"></div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="screen-result" class="screen" aria-labelledby="result-name">
+    <div class="result-hero">
+      <div class="eyebrow result-eyebrow">Your working style</div>
+      <h1 class="result-name" id="result-name" tabindex="-1"></h1>
+      <p class="result-tagline" id="result-tagline"></p>
+      <p class="result-desc" id="result-desc"></p>
+      <div class="secondary-note" id="secondary-note" hidden></div>
+    </div>
+
+    <div class="cols">
+      <div class="col"><h3>Superpowers</h3><ul id="col-super"></ul></div>
+      <div class="col"><h3>Watch-outs</h3><ul id="col-watch"></ul></div>
+      <div class="col"><h3>How to work with me</h3><ul id="col-work"></ul></div>
+    </div>
+
+    <div class="ranking">
+      <h3>How you scored across all five</h3>
+      <div id="bars"></div>
+    </div>
+
+    <div class="result-actions">
+      <button class="btn" id="copy-btn" type="button">Copy my result</button>
+      <button class="btn ghost" id="retake-btn" type="button">Retake quiz</button>
+      <span class="copied" id="copied-msg">Copied ✓</span>
+    </div>
+    <p class="submit-status" id="submit-status" role="status" aria-live="polite" hidden></p>
+    <div class="footer-link">
+      <a href="#dashboard" id="result-dash-link" hidden>See the room's results →</a>
+      <a href="#facilitator">Overview of archetypes →</a>
+    </div>
+  </section>
+
+  <!-- FACILITATOR -->
+  <section id="screen-facilitator" class="screen" aria-labelledby="fac-title">
+    <div class="fac-head">
+      <div class="eyebrow">Facilitator reference</div>
+      <h1 class="fac-title" id="fac-title" tabindex="-1"></h1>
+    </div>
+    <div class="fac-grid" id="fac-grid"></div>
+    <div class="footer-link"><a href="#">← Back</a></div>
+  </section>
+
+  <!-- DASHBOARD (live; only when data collection is enabled) -->
+  <section id="screen-dashboard" class="screen" aria-labelledby="dash-title">
+    <div class="dash-head">
+      <div class="eyebrow">Room results</div>
+      <h1 class="dash-title" id="dash-title" tabindex="-1">How the room works</h1>
+      <p class="dash-sub" id="dash-sub" role="status" aria-live="polite"></p>
+    </div>
+    <div class="dash-controls">
+      <label class="dash-cut">Slice by&nbsp;
+        <select id="dash-group"></select>
+      </label>
+      <button class="btn ghost" id="dash-refresh" type="button">↻ Refresh</button>
+      <button class="btn ghost danger" id="dash-reset" type="button">Reset room results</button>
+    </div>
+    <div class="dash-confirm" id="dash-confirm" role="alertdialog" aria-label="Confirm reset" hidden>
+      <span>Clear all results for this room? This can't be undone. Facilitator PIN required.</span>
+      <input class="dash-pin" id="dash-reset-pin" type="password" placeholder="Facilitator PIN" autocomplete="off" aria-label="Facilitator PIN">
+      <button class="btn ghost" id="dash-reset-cancel" type="button">Cancel</button>
+      <button class="btn danger-solid" id="dash-reset-go" type="button">Reset</button>
+      <div class="dash-reset-err" id="dash-reset-err" role="alert"></div>
+    </div>
+    <div id="dash-body"></div>
+    <div class="footer-link"><a href="#" id="dash-back">← Back</a></div>
+  </section>
+
+  <!-- Shown only when printing before a result exists (blank-page fallback) -->
+  <div id="print-note" hidden>Finish the quiz to see your result, then print or save as PDF.</div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  document.documentElement.lang = document.documentElement.lang || "en";
+
+  // ---- Guard: content.js must have loaded ----
+  if (typeof QUIZ === "undefined") {
+    document.querySelector(".wrap").innerHTML =
+      '<p style="color:#fff;font-family:sans-serif;padding:40px">' +
+      "Couldn't load <b>content.js</b>. Make sure it sits in the same folder as index.html.</p>";
+    return;
+  }
+
+  var ARCH_KEYS = Object.keys(QUIZ.archetypes); // insertion order = V,O,C,S,F
+
+  // ---- App state (memory only; no localStorage) ----
+  var state = {
+    index: 0,          // current question index
+    answers: {},       // qid -> archetype key
+    optionOrder: {},   // qid -> shuffled array of option objects (stable per session)
+    lastDir: "fwd",    // animation direction
+    primary: null,     // winning archetype key
+    secondary: [],     // tied-for-first others (only populated on a tie)
+    facReturn: "screen-start", // screen to return to when leaving the facilitator view
+    identity: null,    // { name, email, groups:{team:...} } captured at Begin (collection mode)
+    submitted: false   // whether this result has been sent to the store
+  };
+
+  // ---- Collection config (config.js). Falls back to local-only if absent. ----
+  var CFG = (typeof CONFIG !== "undefined") ? CONFIG : { ENDPOINT: "", groups: [] };
+  var COLLECT = !!(CFG.ENDPOINT && CFG.ENDPOINT.length);   // collect results + show a dashboard?
+  var MOCK = CFG.ENDPOINT === "MOCK";
+  // anonymous overall-distribution mode: nothing identifying is collected
+  var ANON = COLLECT && !CFG.collectName && !CFG.collectEmail && !((CFG.groups || []).length);
+  var HAS_GROUPS = (CFG.groups || []).length > 0;
+  var mockStore = [];  // in-memory submissions for MOCK mode (resets on reload)
+
+  // ---- Helpers ----
+  function $(id) { return document.getElementById(id); }
+
+  function shuffle(arr) {
+    // Fisher–Yates. Runs once per question at quiz start so order is stable on Back.
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function archKeyOf(option) {
+    // Each option scores exactly one archetype +1. Return that key.
+    return Object.keys(option.scores)[0];
+  }
+
+  function buildOrder() {
+    state.optionOrder = {};
+    QUIZ.questions.forEach(function (q) {
+      state.optionOrder[q.id] = shuffle(q.options);
+    });
+  }
+
+  function tally() {
+    var t = {};
+    ARCH_KEYS.forEach(function (k) { t[k] = 0; });
+    Object.keys(state.answers).forEach(function (qid) {
+      t[state.answers[qid]] += 1;
+    });
+    return t;
+  }
+
+  function setAccent(color) {
+    var root = document.documentElement;
+    root.style.setProperty("--accent", color);
+    // Pick readable ink (dark) for on-accent text; all archetype colors are light.
+    root.style.setProperty("--accent-ink", "#0a0a0b");
+  }
+
+  function resetAccent() { setAccent("#ffcc00"); }
+
+  function showScreen(id) {
+    var screens = document.querySelectorAll(".screen");
+    for (var i = 0; i < screens.length; i++) screens[i].classList.remove("is-active");
+    $(id).classList.add("is-active");
+    window.scrollTo(0, 0);
+    if (id !== "screen-dashboard") stopDashPolling();   // stop auto-refresh when leaving the dashboard
+  }
+
+  function focusEl(el) {
+    // Focus without scrolling — screens already reset scroll to top on show, and
+    // scrolling-on-focus would push the question/heading above the fold on mobile.
+    if (el && el.focus) {
+      try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    }
+  }
+
+  // ---- Start screen ----
+  function initStart() {
+    $("start-title").textContent = QUIZ.title;
+    // put the trailing "?" (if any) in accent
+    if (/\?$/.test(QUIZ.title)) {
+      $("start-title").innerHTML =
+        QUIZ.title.slice(0, -1) + '<span class="q">?</span>';
+    }
+    $("start-intro").textContent = QUIZ.intro;
+    $("meta-count").textContent = QUIZ.questions.length;
+    $("q-total").textContent = "of " + QUIZ.questions.length;
+  }
+
+  // ---- Question rendering ----
+  function renderQuestion() {
+    var q = QUIZ.questions[state.index];
+    var opts = state.optionOrder[q.id];
+
+    $("q-now").textContent = state.index + 1;
+    // position-based: Q1 shows some fill (started), the last question reads 100%
+    $("progress-fill").style.width =
+      ((state.index + 1) / QUIZ.questions.length * 100) + "%";
+    $("back-btn").textContent = state.index === 0 ? "← Start" : "← Back";
+
+    $("qtext").textContent = q.text;
+
+    var box = $("options");
+    box.innerHTML = "";
+    opts.forEach(function (opt, i) {
+      var key = archKeyOf(opt);
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "option" + (state.answers[q.id] === key ? " selected" : "");
+      // The archetype key is captured in the click closure only — deliberately
+      // NOT written to the DOM, so the type can't be inferred mid-quiz even by
+      // inspecting the markup. The badge shows the on-screen position (1..5).
+      btn.innerHTML =
+        '<span class="key" aria-hidden="true">' + (i + 1) + "</span>" +
+        '<span class="otext"></span>';
+      btn.querySelector(".otext").textContent = opt.text;
+      btn.addEventListener("click", function () { choose(q.id, key); });
+      box.appendChild(btn);
+    });
+
+    // replay the slide animation
+    var anim = $("q-anim");
+    anim.classList.remove("q-anim");
+    anim.setAttribute("data-dir", state.lastDir === "back" ? "back" : "fwd");
+    void anim.offsetWidth; // reflow to restart animation
+    anim.classList.add("q-anim");
+
+    // keep the question + progress in view on every transition, then focus an option
+    // for keyboard users (without scrolling it out of view on mobile). On revisit, focus
+    // the previously-chosen option so the focus ring matches the selected state.
+    window.scrollTo(0, 0);
+    var toFocus = box.querySelector(".option.selected") || box.querySelector(".option");
+    if (toFocus) focusEl(toFocus);
+  }
+
+  function choose(qid, key) {
+    state.answers[qid] = key;
+    if (state.index < QUIZ.questions.length - 1) {
+      state.lastDir = "fwd";
+      state.index++;
+      renderQuestion();
+    } else {
+      finish();
+    }
+  }
+
+  function goBack() {
+    if (state.index === 0) {
+      showScreen("screen-start");
+      focusEl($("begin-btn"));
+      return;
+    }
+    state.lastDir = "back";
+    state.index--;
+    renderQuestion();
+  }
+
+  // ---- Keyboard nav on the question screen ----
+  function onQuizKeydown(e) {
+    if (!$("screen-quiz").classList.contains("is-active")) return;
+    var buttons = Array.prototype.slice.call($("options").querySelectorAll(".option"));
+    if (!buttons.length) return;
+    var current = document.activeElement;
+    var idx = buttons.indexOf(current);
+
+    if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+      e.preventDefault();
+      // from a non-option target (idx === -1), enter the list at the first option
+      focusEl(buttons[idx < 0 ? 0 : (idx + 1) % buttons.length]);
+    } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      // from a non-option target (idx === -1), enter the list at the last option
+      focusEl(buttons[idx < 0 ? buttons.length - 1 : (idx - 1 + buttons.length) % buttons.length]);
+    } else if (/^[1-9]$/.test(e.key)) {
+      var n = parseInt(e.key, 10) - 1;
+      if (n < buttons.length) { e.preventDefault(); buttons[n].click(); }
+    } else if (e.key === "Backspace") {
+      e.preventDefault();
+      goBack();
+    }
+  }
+
+  // ---- Finish → compute result or tie ----
+  function finish() {
+    var t = tally();
+    var max = Math.max.apply(null, ARCH_KEYS.map(function (k) { return t[k]; }));
+    var leaders = ARCH_KEYS.filter(function (k) { return t[k] === max; });
+
+    if (leaders.length > 1) {
+      renderTie(leaders);
+      showScreen("screen-tie");
+      focusEl($("tie-title")); // focus the heading so the "it's close, pick one" explanation is read first
+    } else {
+      state.primary = leaders[0];
+      state.secondary = [];
+      goResult();
+    }
+  }
+
+  function goResult() {
+    renderResult();
+    showScreen("screen-result");
+    focusEl($("result-name")); // land keyboard/SR focus on the result heading, not <body>
+    submitResult();            // no-op unless data collection is enabled (and not already sent)
+  }
+
+  // ---- Tie screen ----
+  function renderTie(leaders) {
+    var others = leaders.length - 1;
+    $("tie-sub").textContent =
+      leaders.length + " styles tied. Which of these sounds most like you? Your pick leads; " +
+      (others === 1 ? "the other stays with you as a close second." : "the rest stay with you as close seconds.");
+    var grid = $("tie-grid");
+    grid.innerHTML = "";
+    leaders.forEach(function (key) {
+      var a = QUIZ.archetypes[key];
+      var card = document.createElement("button");
+      card.type = "button";
+      card.className = "tie-card";
+      card.style.setProperty("--tc", a.color);
+      card.innerHTML =
+        '<div class="tc-name"></div><div class="tc-tag"></div>';
+      card.querySelector(".tc-name").textContent = a.name;
+      card.querySelector(".tc-tag").textContent = a.tagline;
+      card.addEventListener("click", function () {
+        state.primary = key;
+        state.secondary = leaders.filter(function (k) { return k !== key; });
+        goResult();
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  // ---- Result screen ----
+  function renderResult() {
+    var key = state.primary;
+    var a = QUIZ.archetypes[key];
+    var t = tally();
+    setAccent(a.color);
+
+    $("result-name").textContent = a.name;
+    $("result-tagline").textContent = a.tagline;
+    $("result-desc").textContent = a.description;
+
+    // secondary note only when there was a tie
+    var note = $("secondary-note");
+    if (state.secondary.length) {
+      var names = state.secondary.map(function (k) {
+        return "<b>" + QUIZ.archetypes[k].name + "</b>";
+      });
+      note.innerHTML = "You're also strongly " + joinList(names) + ".";
+      note.hidden = false;
+    } else {
+      note.hidden = true;
+    }
+
+    fillList("col-super", a.superpowers);
+    fillList("col-watch", a.watchouts);
+    fillList("col-work", a.howToWorkWithMe);
+
+    renderBars(t);
+  }
+
+  function fillList(id, items) {
+    var ul = $(id);
+    ul.innerHTML = "";
+    items.forEach(function (txt) {
+      var li = document.createElement("li");
+      li.textContent = txt;
+      ul.appendChild(li);
+    });
+  }
+
+  function joinList(arr) {
+    // grammatical join with a serial comma: "A", "A and B", "A, B, and C"
+    if (arr.length <= 1) return arr.join("");
+    if (arr.length === 2) return arr[0] + " and " + arr[1];
+    return arr.slice(0, -1).join(", ") + ", and " + arr[arr.length - 1];
+  }
+
+  function renderBars(t) {
+    // Ranked high→low. Bars scale to the top score so the leader fills the track.
+    var ranked = ARCH_KEYS.slice().sort(function (x, y) { return t[y] - t[x]; });
+    var top = Math.max.apply(null, ranked.map(function (k) { return t[k]; })) || 1;
+    var box = $("bars");
+    box.innerHTML = "";
+    ranked.forEach(function (key) {
+      var a = QUIZ.archetypes[key];
+      var row = document.createElement("div");
+      row.className = "bar-row";
+      row.innerHTML =
+        '<div class="bar-label"></div>' +
+        '<div class="bar-track"><div class="bar-fill"></div></div>' +
+        '<div class="bar-val"></div>';
+      row.querySelector(".bar-label").textContent = a.name.replace(/^The /, "");
+      row.querySelector(".bar-val").textContent = t[key];
+      var fill = row.querySelector(".bar-fill");
+      fill.style.background = a.color;
+      box.appendChild(row);
+      // animate width after insertion
+      (function (el, pct) {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () { el.style.width = pct + "%"; });
+        });
+      })(fill, Math.round(t[key] / top * 100));
+    });
+  }
+
+  // ---- Copy result ----
+  function resultText() {
+    var t = tally();
+    var a = QUIZ.archetypes[state.primary];
+    var top3 = ARCH_KEYS.slice()
+      .sort(function (x, y) { return t[y] - t[x]; })
+      .slice(0, 3)
+      .map(function (k) { return QUIZ.archetypes[k].name.replace(/^The /, "") + " " + t[k]; });
+    var lines = [
+      QUIZ.title + " — my working style",
+      "",
+      a.name + " — " + a.tagline,
+      "Top 3: " + top3.join("  ·  ")
+    ];
+    if (state.secondary.length) {
+      lines.push("(Close second: " +
+        joinList(state.secondary.map(function (k) { return QUIZ.archetypes[k].name; })) + ")");
+    }
+    return lines.join("\n");
+  }
+
+  function copyResult() {
+    var text = resultText();
+    function done() {
+      var m = $("copied-msg");
+      m.classList.add("show");
+      setTimeout(function () { m.classList.remove("show"); }, 1800);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+    } else {
+      fallbackCopy(text, done);
+    }
+  }
+
+  function fallbackCopy(text, done) {
+    // Works on file:// where the async clipboard API is often unavailable.
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) { /* no-op */ }
+    document.body.removeChild(ta);
+  }
+
+  // ---- Reset to a fresh attempt (used by Begin and Retake) ----
+  function resetQuiz() {
+    state.index = 0;
+    state.answers = {};
+    state.primary = null;
+    state.secondary = [];
+    state.lastDir = "fwd";
+    buildOrder();          // fresh shuffle; stays stable within the attempt (Back re-reads it)
+    resetAccent();
+  }
+
+  function retake() {
+    resetQuiz();
+    showScreen("screen-start");
+    focusEl($("begin-btn"));
+  }
+
+  // ---- Facilitator view (bonus; #facilitator) ----
+  function renderFacilitator() {
+    $("fac-title").textContent = QUIZ.title;
+    var grid = $("fac-grid");
+    if (grid.childElementCount) return; // build once
+    ARCH_KEYS.forEach(function (key) {
+      var a = QUIZ.archetypes[key];
+      var card = document.createElement("div");
+      card.className = "fac-card";
+      card.style.setProperty("--fc", a.color);
+      card.innerHTML = "<h2></h2><div class='fc-tag'></div><p></p>";
+      card.querySelector("h2").textContent = a.name;
+      card.querySelector(".fc-tag").textContent = a.tagline;
+      card.querySelector("p").textContent = a.description;
+      grid.appendChild(card);
+    });
+  }
+
+  function activeScreenId() {
+    var el = document.querySelector(".screen.is-active");
+    return el ? el.id : null;
+  }
+
+  function isOverlay(id) { return id === "screen-facilitator" || id === "screen-dashboard"; }
+
+  function routeHash() {
+    var hash = location.hash;
+    if (hash === "#facilitator") {
+      if (!isOverlay(activeScreenId())) state.facReturn = activeScreenId() || "screen-start";
+      renderFacilitator();
+      resetAccent();
+      showScreen("screen-facilitator");
+      focusEl($("fac-title"));   // move focus into the view, not <body>
+    } else if (hash === "#dashboard" && COLLECT) {
+      if (!isOverlay(activeScreenId())) state.facReturn = activeScreenId() || "screen-start";
+      openDashboard();
+    } else if (isOverlay(activeScreenId()) || !activeScreenId()) {
+      leaveOverlay();
+    }
+  }
+
+  function leaveOverlay() {
+    // return to wherever the overlay (facilitator/dashboard) was opened from
+    var back = state.facReturn || "screen-start";
+    if (back === "screen-result" && state.primary) {
+      setAccent(QUIZ.archetypes[state.primary].color); // restore the winner's accent
+    } else {
+      resetAccent();
+    }
+    showScreen(back);
+    // return focus to a sensible target on the landing screen (never <body>)
+    if (back === "screen-start") focusEl($("begin-btn"));
+    else if (back === "screen-result") focusEl($("result-name"));
+    else if (back === "screen-quiz") focusEl($("options").querySelector(".option"));
+    else if (back === "screen-facilitator") focusEl($("fac-title"));
+  }
+
+  // ================= Data collection + dashboards (only when COLLECT) =================
+  var lastDashData = null;
+
+  function setupCollection() {
+    if (!COLLECT) return;              // local-only mode: no intake, no dashboard links
+    if (ANON) {
+      // nothing to collect up front — the result is added to the room's totals anonymously
+      $("intake-note").textContent =
+        "When you finish, your result is added to the room's totals anonymously and you can see details on each of the five archetypes.";
+    } else {
+      buildIntake();
+      $("intake").hidden = false;
+    }
+    $("intake-note").hidden = false;
+    $("start-dash-link").hidden = false;
+    $("result-dash-link").hidden = false;
+    initDashboardControls();
+    if (MOCK) seedMock();
+  }
+
+  function buildIntake() {
+    var form = $("intake");
+    form.innerHTML = "";
+    if (CFG.collectName) form.appendChild(field("Name", inputEl("f-name", "text", "Your name")));
+    if (CFG.collectEmail) form.appendChild(field("Work email", inputEl("f-email", "email", "you@grindr.com")));
+    (CFG.groups || []).forEach(function (g) {
+      form.appendChild(field(g.label, selectEl("g-" + g.id, g.options)));
+    });
+    // Hidden submit control so pressing Enter in any field starts the quiz — a form
+    // with 2+ text inputs only implicitly submits on Enter when a submit button exists.
+    var hiddenSubmit = document.createElement("button");
+    hiddenSubmit.type = "submit";
+    hiddenSubmit.setAttribute("aria-hidden", "true");
+    hiddenSubmit.tabIndex = -1;
+    hiddenSubmit.style.cssText = "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);border:0;";
+    form.appendChild(hiddenSubmit);
+    form.addEventListener("submit", function (e) { e.preventDefault(); begin(); });
+  }
+
+  function field(labelText, control) {
+    var wrap = document.createElement("div");
+    wrap.className = "field";
+    var lab = document.createElement("label");
+    lab.textContent = labelText;
+    lab.setAttribute("for", control.id);
+    wrap.appendChild(lab);
+    wrap.appendChild(control);
+    return wrap;
+  }
+  function inputEl(id, type, placeholder) {
+    var i = document.createElement("input");
+    i.id = id; i.type = type; i.placeholder = placeholder;
+    i.autocomplete = (type === "email") ? "email" : "name";
+    return i;
+  }
+  function selectEl(id, options) {
+    var s = document.createElement("select");
+    s.id = id;
+    var ph = document.createElement("option");
+    ph.value = ""; ph.textContent = "Select…"; ph.disabled = true; ph.selected = true;
+    s.appendChild(ph);
+    (options || []).forEach(function (o) {
+      var opt = document.createElement("option");
+      opt.value = o; opt.textContent = o;
+      s.appendChild(opt);
+    });
+    return s;
+  }
+
+  function validateAndReadIntake() {
+    var err = $("intake-error");
+    err.hidden = true;
+    var identity = { name: "", email: "", groups: {} };
+    function fail(msg, focusId) { err.textContent = msg; err.hidden = false; focusEl($(focusId)); return { ok: false }; }
+
+    if (CFG.collectName) {
+      var name = ($("f-name").value || "").trim();
+      if (!name) return fail("Please enter your name.", "f-name");
+      identity.name = name;
+    }
+    if (CFG.collectEmail) {
+      var email = ($("f-email").value || "").trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail("Please enter a valid work email.", "f-email");
+      identity.email = email;
+    }
+    for (var i = 0; i < (CFG.groups || []).length; i++) {
+      var g = CFG.groups[i];
+      if (!$("g-" + g.id).value) return fail("Please choose your " + g.label.toLowerCase() + ".", "g-" + g.id);
+      identity.groups[g.id] = $("g-" + g.id).value;
+    }
+    return { ok: true, identity: identity };
+  }
+
+  function submitResult() {
+    if (!COLLECT) return;
+    var status = $("submit-status");
+    if (state.submitted) {
+      status.hidden = false; status.classList.remove("err");
+      status.textContent = ANON
+        ? "Your result is already in the room's totals."
+        : "Your earlier result is already counted — retakes aren't re-submitted.";
+      return;
+    }
+    if (ANON && !MOCK && deviceAlreadyAdded()) {   // don't double-count on a reload/retake on the same device
+      state.submitted = true;
+      status.hidden = false; status.classList.remove("err");
+      status.textContent = "Your result is already in the room's totals.";
+      return;
+    }
+    var t = tally();
+    var payload = {
+      token: CFG.TOKEN || "",
+      name: state.identity ? state.identity.name : "",
+      email: state.identity ? state.identity.email : "",
+      groups: state.identity ? state.identity.groups : {},
+      archetype: QUIZ.archetypes[state.primary].name,
+      scores: t,
+      secondary: state.secondary.map(function (k) { return QUIZ.archetypes[k].name; })
+    };
+    status.hidden = false; status.classList.remove("err");
+    status.textContent = ANON ? "Adding your result to the room…" : "Saving your result to the room…";
+    postSubmission(payload).then(function () {
+      state.submitted = true;
+      if (ANON && !MOCK) markDeviceAdded();
+      status.textContent = ANON ? "Added ✓  You're in the room's totals." : "Saved ✓  You're in the room totals.";
+    }, function () {
+      status.classList.add("err");
+      status.textContent = "Couldn't reach the results store — your result above is still yours to keep.";
+    });
+  }
+
+  function deviceKey_() { return "wsq_added:" + (CFG.ENDPOINT || ""); }
+  function deviceAlreadyAdded() {
+    try { return !!window.localStorage.getItem(deviceKey_()); } catch (e) { return false; }
+  }
+  function markDeviceAdded() {
+    try { window.localStorage.setItem(deviceKey_(), "1"); } catch (e) { /* private mode: no-op */ }
+  }
+
+  function fetchWithTimeout(url, opts, ms) {
+    opts = opts || {};
+    if (typeof AbortController === "undefined") return fetch(url, opts); // very old browsers
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, ms || 12000);
+    opts.signal = ctrl.signal;
+    return fetch(url, opts).then(
+      function (r) { clearTimeout(timer); return r; },
+      function (e) { clearTimeout(timer); throw e; }   // AbortError on stall → flows to error handlers
+    );
+  }
+
+  function postSubmission(payload) {
+    if (MOCK) { mockStore.push(payload); return Promise.resolve({ ok: true }); }
+    return fetchWithTimeout(CFG.ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" }, // simple request → no CORS preflight
+      body: JSON.stringify(payload)
+    }, 12000).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.ok) throw new Error((j && j.error) || "post failed");
+      return j;
+    });
+  }
+
+  function fetchAggregates() {
+    if (MOCK) return Promise.resolve(aggregate(mockStore));
+    var sep = CFG.ENDPOINT.indexOf("?") < 0 ? "?" : "&";
+    return fetchWithTimeout(CFG.ENDPOINT + sep + "t=" + (new Date()).getTime(), {}, 12000)
+      .then(function (r) { return r.json(); });
+  }
+
+  function aggregate(rows) { // MOCK mirror of the Apps Script doGet aggregation
+    var total = 0, overall = {}, byGroup = {};
+    rows.forEach(function (p) {
+      var a = p.archetype; if (!a) return;
+      total++; overall[a] = (overall[a] || 0) + 1;
+      var groups = p.groups || {};
+      Object.keys(groups).forEach(function (gid) {
+        var val = groups[gid]; if (!val) return;
+        byGroup[gid] = byGroup[gid] || {};
+        byGroup[gid][val] = byGroup[gid][val] || {};
+        byGroup[gid][val][a] = (byGroup[gid][val][a] || 0) + 1;
+      });
+    });
+    return { ok: true, total: total, overall: overall, byGroup: byGroup };
+  }
+
+  function shortName(name) { return name.replace(/^The /, ""); }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function animateWidth(el, pct) {
+    requestAnimationFrame(function () { requestAnimationFrame(function () { el.style.width = pct + "%"; }); });
+  }
+
+  function initDashboardControls() {
+    var sel = $("dash-group");
+    sel.innerHTML = "";
+    (CFG.groups || []).forEach(function (g) {
+      var o = document.createElement("option");
+      o.value = g.id; o.textContent = g.label;
+      sel.appendChild(o);
+    });
+    // hide the slice picker if there's only one dimension to slice by
+    sel.parentNode.style.display = (CFG.groups || []).length > 1 ? "" : "none";
+  }
+
+  function openDashboard() {
+    resetAccent();
+    showScreen("screen-dashboard");
+    focusEl($("dash-title"));   // move focus into the view, not <body>
+    loadDashboard();
+    startDashPolling();         // keep a projected view live as people finish
+  }
+
+  // Auto-refresh so a projected dashboard updates itself. Polls quietly; only
+  // re-renders (without re-animating) when the total actually changes.
+  var dashTimer = null;
+  var lastTotal = -1;
+  function startDashPolling() {
+    stopDashPolling();
+    dashTimer = window.setInterval(function () { loadDashboard({ silent: true }); }, 15000);
+  }
+  function stopDashPolling() { if (dashTimer) { window.clearInterval(dashTimer); dashTimer = null; } }
+
+  function loadDashboard(opts) {
+    opts = opts || {};
+    if (!opts.silent) { $("dash-sub").textContent = "Loading…"; $("dash-body").innerHTML = ""; }
+    fetchAggregates().then(function (data) {
+      if (!data || !data.ok) { if (!opts.silent) dashError(); return; }
+      lastDashData = data;
+      var changed = data.total !== lastTotal;
+      lastTotal = data.total;
+      // manual/first load animates; silent polls only redraw when the count changed (no flicker)
+      if (!opts.silent) renderDashboard(data, true);
+      else if (changed) renderDashboard(data, false);
+    }).catch(function () { if (!opts.silent) dashError(); });
+  }
+
+  function dashError() {
+    lastDashData = null;   // don't let a stale slice re-render over a failed refresh
+    $("dash-sub").textContent = "Couldn’t load results.";
+    $("dash-body").innerHTML = '<p class="dash-empty err">Couldn’t reach the results. Check your connection and hit Refresh.</p>';
+  }
+
+  function resetRoom(pin) {
+    if (MOCK) {
+      // demo gate so the PIN mechanism is visible; live verification happens server-side
+      if ((CFG.demoResetPin || "") !== "" && String(pin || "") !== CFG.demoResetPin) {
+        return Promise.reject(new Error("bad pin"));
+      }
+      mockStore = [];
+      afterRoomReset();
+      return Promise.resolve();
+    }
+    return fetch(CFG.ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ token: CFG.TOKEN || "", action: "reset", pin: pin || "" })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.ok) throw new Error((j && j.error) || "reset failed");
+      afterRoomReset();
+    });
+  }
+
+  // After a room reset the room is fresh, so let THIS device contribute again: clear the
+  // in-memory + localStorage "already added" guards that would otherwise block a re-take
+  // from counting. (Bug: reset wiped totals but a re-take on the same device didn't count.)
+  function afterRoomReset() {
+    state.submitted = false;
+    try { window.localStorage.removeItem(deviceKey_()); } catch (e) { /* no-op */ }
+    lastTotal = -1;
+    loadDashboard();
+  }
+
+  function renderDashboard(data, animate) {
+    if (animate === undefined) animate = true;
+    var body = $("dash-body");
+    body.innerHTML = "";
+    $("dash-sub").textContent = data.total + (data.total === 1 ? " response" : " responses") + " so far.";
+    if (!data.total) {
+      body.innerHTML = '<p class="dash-empty">No responses yet. Results appear here as people finish.</p>';
+      return;
+    }
+
+    // Overall distribution
+    var sec1 = document.createElement("div");
+    sec1.className = "dash-section";
+    sec1.innerHTML = "<h3>Overall — the whole room</h3>";
+    var arr = ARCH_KEYS.map(function (k) {
+      return { name: QUIZ.archetypes[k].name, color: QUIZ.archetypes[k].color, count: data.overall[QUIZ.archetypes[k].name] || 0 };
+    }).sort(function (a, b) { return b.count - a.count; });
+    var topCount = Math.max.apply(null, arr.map(function (x) { return x.count; })) || 1;
+    arr.forEach(function (x) {
+      var row = document.createElement("div");
+      row.className = "dbar-row";
+      row.innerHTML = '<div class="dbar-label"></div><div class="dbar-track"><div class="dbar-fill"></div></div><div class="dbar-val"></div>';
+      row.querySelector(".dbar-label").textContent = shortName(x.name);
+      var pct = Math.round(x.count / data.total * 100);
+      row.querySelector(".dbar-val").textContent = x.count + " · " + pct + "%";
+      var fill = row.querySelector(".dbar-fill");
+      fill.style.background = x.color;
+      sec1.appendChild(row);
+      var w = Math.round(x.count / topCount * 100);
+      if (animate) animateWidth(fill, w); else fill.style.width = w + "%";  // polled refresh: no from-0 flicker
+    });
+    body.appendChild(sec1);
+
+    // By selected group (e.g. team) — only when grouping is configured (skipped in overall-only mode)
+    if (HAS_GROUPS) {
+    var gid = $("dash-group").value || ((CFG.groups[0] || {}).id);
+    var gLabel = ((CFG.groups.filter(function (g) { return g.id === gid; })[0]) || {}).label || gid;
+    var gData = (data.byGroup && data.byGroup[gid]) || {};
+    var sec2 = document.createElement("div");
+    sec2.className = "dash-section";
+    sec2.innerHTML = "<h3>By " + escapeHtml(String(gLabel).toLowerCase()) + "</h3>";
+
+    // privacy: hide any group value with fewer than minCell responses so a lone
+    // respondent can't be identified. (The endpoint also suppresses server-side.)
+    var minCell = (typeof CFG.minCell === "number") ? CFG.minCell : (data.minCell || 1);
+    var allVals = Object.keys(gData).map(function (v) {
+      var tot = 0; Object.keys(gData[v]).forEach(function (a) { tot += gData[v][a]; });
+      return { value: v, byArch: gData[v], total: tot };
+    });
+    var groupVals = allVals.filter(function (g) { return g.total >= minCell; })
+      .sort(function (a, b) { return b.total - a.total; });
+
+    if (!groupVals.length) {
+      sec2.innerHTML += '<p class="dash-empty">Not enough responses in any single ' +
+        escapeHtml(String(gLabel).toLowerCase()) + ' yet to show without identifying people.</p>';
+    }
+    groupVals.forEach(function (gv) {
+      // flex-proportional segments fill the track exactly (no rounding gap); each is
+      // floored to a visible sliver by CSS min-width.
+      var parts = [];    // text breakdown for the accessible label (color alone isn't enough)
+      var stack = "";
+      ARCH_KEYS.forEach(function (k) {
+        var name = QUIZ.archetypes[k].name;
+        var c = gv.byArch[name] || 0;
+        if (!c) return;
+        parts.push(shortName(name) + " " + c);
+        stack += '<span style="flex:' + c + ' 1 0;background:' + QUIZ.archetypes[k].color +
+                 '" title="' + escapeHtml(shortName(name) + ": " + c) + '"></span>';
+      });
+      var stackLabel = escapeHtml(gv.value + " — " + parts.join(", ") + " (of " + gv.total + ")");
+      var row = document.createElement("div");
+      row.className = "grp-row";
+      row.innerHTML = '<div class="grp-label"></div>' +
+        '<div class="stack" role="img" aria-label="' + stackLabel + '">' + stack + '</div>' +
+        '<div class="grp-count"></div>';
+      row.querySelector(".grp-label").textContent = gv.value;
+      row.querySelector(".grp-count").textContent = "n=" + gv.total;
+      sec2.appendChild(row);
+    });
+    if (minCell > 1) {
+      var pnote = document.createElement("p");
+      pnote.className = "dash-note";
+      pnote.textContent = gLabel + "s with fewer than " + minCell +
+        " responses are hidden here to keep individual results private.";
+      sec2.appendChild(pnote);
+    }
+    body.appendChild(sec2);
+
+    // Legend
+    var legend = document.createElement("div");
+    legend.className = "legend";
+    ARCH_KEYS.forEach(function (k) {
+      var a = QUIZ.archetypes[k];
+      var item = document.createElement("span");
+      item.className = "legend-item";
+      item.innerHTML = '<span class="legend-swatch" style="background:' + a.color + '"></span>';
+      item.appendChild(document.createTextNode(shortName(a.name)));
+      legend.appendChild(item);
+    });
+    body.appendChild(legend);
+    } // end HAS_GROUPS
+  }
+
+  function seedMock() { // demo data so the dashboard renders during local (MOCK) testing
+    var keys = ARCH_KEYS;
+    if (!HAS_GROUPS) {
+      // anonymous overall-only: seed ~28 archetype-only submissions
+      var demoArch = [0,1,2,3,4,0,1,2,3,4,0,1,3,2,4,1,0,3,2,4,1,3,0,4,2,1,3,0];
+      demoArch.forEach(function (i) {
+        mockStore.push({ archetype: QUIZ.archetypes[keys[i % keys.length]].name });
+      });
+      return;
+    }
+    var teams = (CFG.groups[0] && CFG.groups[0].options) || ["Team A", "Team B"];
+    var gid0 = (CFG.groups[0] || {}).id || "team";   // key by the configured group id, not literal "team"
+    var demo = [[0,0],[0,3],[0,4],[1,1],[1,1],[1,2],[2,2],[2,0],[3,3],[3,4],[4,4],[4,1],
+                [5,0],[5,2],[6,3],[6,3],[7,1],[8,4],[9,2],[2,1],[1,4],[0,0],[3,2],[5,3]];
+    demo.forEach(function (pair) {
+      var g = {}; g[gid0] = teams[pair[0] % teams.length];
+      mockStore.push({ groups: g, archetype: QUIZ.archetypes[keys[pair[1] % keys.length]].name });
+    });
+  }
+  // ================= end data collection =================
+
+  // ---- Wire up ----
+  function begin() {
+    if (COLLECT) {
+      var res = validateAndReadIntake();
+      if (!res.ok) return;             // stay on start screen with the inline error
+      state.identity = res.identity;
+    }
+    resetQuiz();                       // fresh attempt from question 1 (keeps identity/submitted)
+    showScreen("screen-quiz");
+    renderQuestion();
+  }
+
+  initStart();
+  buildOrder();
+  setupCollection();   // builds intake + reveals dashboard links when collection is enabled
+
+  $("begin-btn").addEventListener("click", begin);
+  $("back-btn").addEventListener("click", goBack);
+  $("copy-btn").addEventListener("click", copyResult);
+  $("retake-btn").addEventListener("click", retake);
+  $("dash-refresh").addEventListener("click", function () { loadDashboard(); });
+  $("dash-group").addEventListener("change", function () {
+    if (lastDashData) renderDashboard(lastDashData); else loadDashboard();
+  });
+  // Reset room results — two-step confirm so a participant can't wipe totals in one click
+  $("dash-reset").addEventListener("click", function () {
+    $("dash-confirm").hidden = false; $("dash-reset").hidden = true;
+    $("dash-reset-err").textContent = ""; $("dash-reset-pin").value = "";
+    focusEl($("dash-reset-pin"));
+  });
+  $("dash-reset-cancel").addEventListener("click", function () {
+    $("dash-confirm").hidden = true; $("dash-reset").hidden = false;
+    $("dash-reset-pin").value = ""; $("dash-reset-err").textContent = "";
+    focusEl($("dash-reset"));
+  });
+  $("dash-reset-go").addEventListener("click", function () {
+    var pin = $("dash-reset-pin").value;
+    var err = $("dash-reset-err"); err.textContent = "";
+    var go = $("dash-reset-go"); go.disabled = true; go.textContent = "Resetting…";
+    Promise.resolve(resetRoom(pin)).then(function () {
+      $("dash-confirm").hidden = true; $("dash-reset").hidden = false; $("dash-reset-pin").value = "";
+    }, function (e) {
+      err.textContent = (e && /pin/i.test(String(e.message || ""))) ? "Incorrect facilitator PIN." : "Couldn't reset — try again.";
+    }).then(function () { go.disabled = false; go.textContent = "Reset"; });
+  });
+  document.addEventListener("keydown", onQuizKeydown);
+  window.addEventListener("hashchange", routeHash);
+
+  // initial route
+  if (location.hash === "#facilitator") {
+    state.facReturn = "screen-start";
+    renderFacilitator();
+    showScreen("screen-facilitator");
+    focusEl($("fac-title"));
+  } else if (location.hash === "#dashboard" && COLLECT) {
+    state.facReturn = "screen-start";
+    openDashboard();
+  } else {
+    showScreen("screen-start");
+    focusEl($("begin-btn"));
+  }
+})();
+</script>

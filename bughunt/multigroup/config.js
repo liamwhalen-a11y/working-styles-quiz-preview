@@ -1,0 +1,1 @@
+const CONFIG = { ENDPOINT: "MOCK", TOKEN: "x", collectName: false, collectEmail: false, minCell: 3, demoResetPin: "reset-1234", groups: [{ id: "team", label: "Team", options: ["Product","Eng","GTM"] }, { id: "level", label: "Level", options: ["IC","Manager","Director"] }] };

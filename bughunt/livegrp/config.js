@@ -1,0 +1,1 @@
+const CONFIG = { ENDPOINT: "http://localhost:8792/x", TOKEN: "tok123", collectName: true, collectEmail: true, minCell: 3, demoResetPin: "reset-1234", groups: [{ id: "team", label: "Team", options: ["Product","Eng","GTM"] }] };
